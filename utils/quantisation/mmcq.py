@@ -22,6 +22,14 @@ def mmcq_loop(pixels, q):
     return [np.mean(pixels, axis=0)]
 
 def mmcq(im, n_bins=2):
+    """
+    Given an image, quantise its pixel values into n_bins colours
+    :param im: numpy array of shape (W, H, 3), the input image
+    :param n_bins: the number of colours to quantise the pixels into. Note that this value should be in the form 2^x
+    where x is a positive integer.
+    :return: a list of n_bins numpy arrays, where each array is of shape (1, 3) and represents the RGB values of one
+    particular colour.
+    """
     q = int(np.log2(n_bins))
     pixels = np.reshape(im, (im.shape[0]*im.shape[1], im.shape[2]))
     quantised_pixels = mmcq_loop(pixels, q)
