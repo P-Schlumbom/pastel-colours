@@ -63,8 +63,10 @@ for epoch in range(epochs):
         source_batch, target_batch = source_palettes[b * batch_size:(b + 1) * batch_size, :], \
                                      pastel_palettes[b * batch_size:(b + 1) * batch_size]
         source_batch, target_batch = torch.from_numpy(source_batch), torch.from_numpy(target_batch)
-        source_batch, target_batch = source_batch.to(device, dtype=torch.float), target_batch.to(device)
-        true_labels, false_labels = torch.ones(batch_size), torch.zeros(batch_size)
+        source_batch, target_batch = source_batch.to(device, dtype=torch.float), \
+                                     target_batch.to(device, dtype=torch.float)
+        true_labels, false_labels = torch.ones((batch_size, 1), device=device), \
+                                    torch.zeros((batch_size, 1), device=device)
 
         # zero the gradients
         gen_optimiser.zero_grad()
