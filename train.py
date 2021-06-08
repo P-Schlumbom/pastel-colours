@@ -3,10 +3,19 @@ import matplotlib.pyplot as plt
 import numpy as np
 import torch
 import torch.nn as nn
-from models.simple_gan import Generator, Discriminator
+from models.simple_gan import Generator, ResidualGenerator, Discriminator
 
+np.random.seed(1)
+SAVE_RESULTS = True
 device = torch.device("cuda")
 torch.backends.cudnn.benchmark = True
+
+#
+# helper functions
+#
+
+def vector2im(vector):
+    return np.reshape(vector, (4, 1, 3))
 
 #
 # training set up
@@ -16,16 +25,17 @@ pastel_palettes = np.load("pastel_palettes.npy") / 255.
 image_palettes = np.load("image_palettes.npy")
 random_palettes = np.load("random_palettes.npy")
 
-source_palettes = image_palettes
+#source_palettes = image_palettes
+source_palettes = random_palettes
 
 N, D = pastel_palettes.shape
 
 # parameters
 model_name = "test"  # name to save model under
-epochs = 100
-batch_size=16
+epochs = 20000
+batch_size=191
 learning_rate=0.0001
-layer_size=64
+layer_size=8
 n_batches = N // batch_size
 
 params = {
@@ -40,14 +50,14 @@ history = {
     }
 
 # models
-generator = Generator(D, layer_size)
+generator = ResidualGenerator(D, layer_size)
 discriminator = Discriminator(D, layer_size)
 generator = generator.to(device)
 discriminator = discriminator.to(device)
 
 # optimisers
-gen_optimiser = torch.optim.Adam(generator.parameters(), lr=learning_rate)
-dis_optimiser = torch.optim.Adam(discriminator.parameters(), lr=learning_rate)
+gen_optimiser = torch.optim.Adam(generator.parameters(), lr=learning_rate)#, weight_decay=1e-4)
+dis_optimiser = torch.optim.Adam(discriminator.parameters(), lr=learning_rate)#, weight_decay=1e-4)
 
 # loss
 loss = nn.BCELoss()
@@ -59,6 +69,8 @@ loss = nn.BCELoss()
 for epoch in range(epochs):
     total_gen_loss = 0
     total_dis_loss = 0
+    np.random.shuffle(source_palettes)
+    np.random.shuffle(pastel_palettes)
     for b in range(n_batches):
         source_batch, target_batch = source_palettes[b * batch_size:(b + 1) * batch_size, :], \
                                      pastel_palettes[b * batch_size:(b + 1) * batch_size]
@@ -104,3 +116,32 @@ plt.plot(history['dis_loss'], label="discriminator loss")
 plt.legend()
 plt.show()
 
+#
+# testing results
+#
+model_name = "testing-{}_{}_{}_{}".format(epochs, batch_size, learning_rate, layer_size)
+
+#source_palettes = image_palettes
+num_samples = 5
+with torch.no_grad():
+  source_palette = source_palettes[:num_samples, :]
+  source_palette = torch.from_numpy(source_palette)
+  source_palette = source_palette.to(device, dtype=torch.float)
+  gen_palette = generator(source_palette)
+
+original_palette = [vector2im(source_palettes[i, :]) for i in range(num_samples)]
+gen_palette = gen_palette.cpu().detach().numpy()
+gen_palette = [vector2im(gen_palette[i, :]) for i in range(num_samples)]
+
+for i in range(num_samples):
+    plt.subplot(1, 2*num_samples, (2*i)+1)
+    plt.imshow(original_palette[i])
+    plt.title("original palette")
+    plt.subplot(1, 2*num_samples, (2*i)+2)
+    plt.imshow(gen_palette[i])
+    if SAVE_RESULTS: plt.savefig("results/{}_demo_palettes.png".format(model_name))
+    plt.title("generated palette")
+plt.show()
+
+
+if SAVE_RESULTS: torch.save(generator.state_dict(), "checkpoints/{}.pt".format(model_name))

@@ -7,8 +7,24 @@ class Generator(nn.Module):
 
         self.lin1 = nn.Linear(input_size, layer_size)
         self.lin2 = nn.Linear(layer_size, layer_size)
+        self.lin3 = nn.Linear(layer_size, input_size)
+        self.activation = nn.Sigmoid()
+
+    def forward(self, x):
+        x = self.activation(self.lin1(x))
+        x = self.activation(self.lin2(x))
+        x = self.activation(self.lin3(x))
+        return x
+
+class ResidualGenerator(nn.Module):
+    def __init__(self, input_size, layer_size=64):
+        super(ResidualGenerator, self).__init__()
+
+        self.lin1 = nn.Linear(input_size, layer_size)
+        self.lin2 = nn.Linear(layer_size, layer_size)
         self.scaler = nn.Linear(layer_size, input_size)
         self.activation = nn.Sigmoid()
+        #self.activation = nn.ReLU()
 
     def forward(self, x):
         x_init = x
@@ -26,6 +42,7 @@ class Discriminator(nn.Module):
         self.lin1 = nn.Linear(input_size, layer_size)
         self.lin2 = nn.Linear(layer_size, 1)
         self.activation = nn.Sigmoid()
+        #self.activation = nn.ReLU()
 
     def forward(self, x):
         x = self.activation(self.lin1(x))
