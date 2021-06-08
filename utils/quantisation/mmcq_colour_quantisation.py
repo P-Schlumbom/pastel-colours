@@ -10,26 +10,24 @@ VERBOSE = 1
 imsource = "../../images"
 image_name = "kth_campus.jpg"
 image_path = join(imsource, image_name)
+target_scale = 1/1
+n_colours = 8
 
 #
 # load image and prepare pixel data
 #
 if VERBOSE >= 1: print("loading and preparing image...")
-target_scale = 1/8
 image = plt.imread(image_path)
 image = resize(image, (int(image.shape[0]*target_scale), int(image.shape[1]*target_scale), image.shape[2]))
 if VERBOSE >= 2:
     print(image.shape)
     print(image[0,0,:])
-pixels = np.reshape(image, (image.shape[0]*image.shape[1], image.shape[2]))
-if VERBOSE >= 2: print(pixels[0])
 
 #
 # Use MMCQ to produce colour scheme.
 # Note that due to how MMCQ works, the number of components should be 2^x for some integer x.
 #
 if VERBOSE >= 1: print("running MMCQ algorithm...")
-n_colours = 4
 colours = mmcq(image, n_colours)
 
 #

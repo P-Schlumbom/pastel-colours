@@ -6,7 +6,7 @@ from bs4 import BeautifulSoup
 # Open html file
 #
 
-with open("pastel_colour_schemes.html", 'r') as f:
+with open("../pastel_colour_schemes.html", 'r') as f:
     data = f.readlines()
 html_text = ""
 for line in data:
@@ -34,5 +34,5 @@ palettes = np.asarray(palettes)
 print(palettes.shape)
 print(palettes)
 
-np.save("pastel_palettes.npy", palettes)
+np.save("../pastel_palettes.npy", palettes)
 
