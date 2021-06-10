@@ -33,3 +33,10 @@ There are several ideas I have for improving results (and also stuff that I stil
 - **convert the RGB values to HSV:** pastel colours are far more clearly defined in HSV space, where they are defined simply by low saturation and high value. This improved representation should dramatically simplify the problem for the network and yield a simpler, more effective solution overall - for all methods proposed here.
 - **ignore neural networks entirely and build a conditional statistical model to represent colour schemes:** I've already drawn ot the schematic for how this model would work. Potentially far simpler than a neural network, while at the same time providing far more control. This would involve having a primary colour, which, once chosen, determines the distribution of the secondary colour, which once chosen determines together with the primary colour the distribution of the tertiary colour, etc.
 
+### generate randomised inputs:
+Done. No real changes in terms of loss performance, but results seemed worse.
+
+### converting to HSV
+- note on HSV conversions: for whatever reason, some websites seem to like to represent hue as an angle, on a scale of 0-360 (while the other two are represented as percentages). skimage however seems to (sensibly) but all values on a 0-1 scale. This is important to bear in mind.
+- now training with HSV data...
+- 
