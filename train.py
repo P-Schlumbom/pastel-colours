@@ -72,8 +72,10 @@ for epoch in range(epochs):
     np.random.shuffle(source_palettes)
     np.random.shuffle(pastel_palettes)
     for b in range(n_batches):
+        #source_batch, target_batch = source_palettes[b * batch_size:(b + 1) * batch_size, :], \
+        #                             pastel_palettes[b * batch_size:(b + 1) * batch_size]
         source_batch, target_batch = source_palettes[b * batch_size:(b + 1) * batch_size, :], \
-                                     pastel_palettes[b * batch_size:(b + 1) * batch_size]
+                                         np.random.rand(batch_size, D)
         source_batch, target_batch = torch.from_numpy(source_batch), torch.from_numpy(target_batch)
         source_batch, target_batch = source_batch.to(device, dtype=torch.float), \
                                      target_batch.to(device, dtype=torch.float)
@@ -119,12 +121,13 @@ plt.show()
 #
 # testing results
 #
-model_name = "testing-{}_{}_{}_{}".format(epochs, batch_size, learning_rate, layer_size)
+model_name = "randgen-{}_{}_{}_{}".format(epochs, batch_size, learning_rate, layer_size)
 
 #source_palettes = image_palettes
 num_samples = 5
 with torch.no_grad():
-  source_palette = source_palettes[:num_samples, :]
+  #source_palette = source_palettes[:num_samples, :]
+  source_palette = np.random.rand(num_samples, D)
   source_palette = torch.from_numpy(source_palette)
   source_palette = source_palette.to(device, dtype=torch.float)
   gen_palette = generator(source_palette)
