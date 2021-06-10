@@ -4,9 +4,11 @@ import numpy as np
 import torch
 import torch.nn as nn
 from models.simple_gan import Generator, ResidualGenerator, Discriminator
+from utils.colour_transforms.hsv import rgb2hsv_palettes, hsv2rgb_palettes
 
 np.random.seed(1)
-SAVE_RESULTS = True
+SAVE_RESULTS = False
+HSV = True
 device = torch.device("cuda")
 torch.backends.cudnn.benchmark = True
 
@@ -28,11 +30,15 @@ random_palettes = np.load("random_palettes.npy")
 #source_palettes = image_palettes
 source_palettes = random_palettes
 
+if HSV:
+    pastel_palettes = rgb2hsv_palettes(pastel_palettes)
+    source_palettes = rgb2hsv_palettes(source_palettes)
+
 N, D = pastel_palettes.shape
 
 # parameters
 model_name = "test"  # name to save model under
-epochs = 20000
+epochs = 60000
 batch_size=191
 learning_rate=0.0001
 layer_size=8
@@ -51,6 +57,7 @@ history = {
 
 # models
 generator = ResidualGenerator(D, layer_size)
+#generator = Generator(D, layer_size)
 discriminator = Discriminator(D, layer_size)
 generator = generator.to(device)
 discriminator = discriminator.to(device)
@@ -126,14 +133,16 @@ model_name = "randgen-{}_{}_{}_{}".format(epochs, batch_size, learning_rate, lay
 #source_palettes = image_palettes
 num_samples = 5
 with torch.no_grad():
-  #source_palette = source_palettes[:num_samples, :]
-  source_palette = np.random.rand(num_samples, D)
+  source_palette = source_palettes[:num_samples, :]
+  #source_palette = np.random.rand(num_samples, D)
   source_palette = torch.from_numpy(source_palette)
   source_palette = source_palette.to(device, dtype=torch.float)
   gen_palette = generator(source_palette)
 
+if HSV: source_palettes = hsv2rgb_palettes(source_palettes)
 original_palette = [vector2im(source_palettes[i, :]) for i in range(num_samples)]
 gen_palette = gen_palette.cpu().detach().numpy()
+if HSV: gen_palette = hsv2rgb_palettes(gen_palette)
 gen_palette = [vector2im(gen_palette[i, :]) for i in range(num_samples)]
 
 for i in range(num_samples):
