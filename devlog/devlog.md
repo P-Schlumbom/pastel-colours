@@ -44,4 +44,6 @@ Done. No real changes in terms of loss performance, but results seemed worse.
 
 ### modelling the distribution of the palette colours in HSV space
 - in **analysis/pastel_palette_modelling.py**
-- 
+- for now, have built a three-state GMM model for each colour. It seems that this could actually be a very similar problem 
+to phoneme recognition, i.e. modelled the same way by a hidden markov model. Might be worth looking at my HMM ASR code for reference.
+  - 
