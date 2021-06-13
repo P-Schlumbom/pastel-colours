@@ -40,3 +40,8 @@ Done. No real changes in terms of loss performance, but results seemed worse.
 - note on HSV conversions: for whatever reason, some websites seem to like to represent hue as an angle, on a scale of 0-360 (while the other two are represented as percentages). skimage however seems to (sensibly) but all values on a 0-1 scale. This is important to bear in mind.
 - now training with HSV data...
 - doesn't really seem to have improved things much. Might have to look over the code again later...
+
+
+### modelling the distribution of the palette colours in HSV space
+- in **analysis/pastel_palette_modelling.py**
+- 
