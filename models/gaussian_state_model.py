@@ -1,6 +1,29 @@
 import numpy as np
+import torch
+import torch.nn as nn
 from sklearn.mixture import GaussianMixture
 import pickle
+
+class PosteriorTransitionMachine(nn.Module):
+    def __init__(self, n_states=3):
+        super(PosteriorTransitionMachine, self).__init__()
+
+        self.ab = nn.Linear(n_states, n_states)
+        self.ac = nn.Linear(n_states, n_states)
+        self.ad = nn.Linear(n_states, n_states)
+        self.bc = nn.Linear(n_states, n_states)
+        self.bd = nn.Linear(n_states, n_states)
+        self.cd = nn.Linear(n_states, n_states)
+
+    def forward(self, a_posteriors, b_priors, c_priors, d_priors):
+        b_posteriors = self.ab(a_posteriors) * b_priors
+        b_posteriors = b_posteriors / torch.sum(b_posteriors)
+        c_posteriors = self.ac(a_posteriors) * self.bc(b_posteriors) * c_priors
+        c_posteriors = c_posteriors / torch.sum(c_posteriors)
+        d_posteriors = self.ad(a_posteriors) * self.bd(b_posteriors) * self.cd(c_posteriors) * d_priors
+        d_posteriors = d_posteriors / torch.sum(d_posteriors)
+        posterior_predictions = torch.cat((a_posteriors, b_posteriors, c_posteriors, d_posteriors))
+        return posterior_predictions
 
 class GaussianStateMachine():
     def __init__(self, M, C):

@@ -46,4 +46,17 @@ Done. No real changes in terms of loss performance, but results seemed worse.
 - in **analysis/pastel_palette_modelling.py**
 - for now, have built a three-state GMM model for each colour. It seems that this could actually be a very similar problem 
 to phoneme recognition, i.e. modelled the same way by a hidden markov model. Might be worth looking at my HMM ASR code for reference.
-  - 
+  
+## 20210616: updated on graphical model
+The probabilistic model is defined by four states, one for each colour: A, B, C, D. Each colour is represented by three states.
+The weights of each of these states is determined by a transition matrix from the dependent state(s) and its prior distribution.
+As each colour has 3 possible states, there are 6 possible 3x3 transition matrices:
+- ab: A -> B
+- ac: A -> C
+- ad: A -> D
+- bc: B -> C
+- bd: B -> D
+- cd: C -> D
+For each colour, using the GMM model, we can calculate the posterior values of each state for each colour scheme.
+  These posteriors will serve as our training data. Using gradient descent, we can then train the values of the transition 
+  matrices. 
