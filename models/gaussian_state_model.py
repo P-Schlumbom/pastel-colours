@@ -49,7 +49,7 @@ class GaussianStateMachine():
 
         if isinstance(C, int):
             self.gmms = [GaussianMixture(n_components=C) for m in range(M)]
-            self.transition_matrices = [np.zeros((C, C)) for n in n_transitions]
+            self.transition_matrices = {m : [np.zeros((C, C)) for n in range(M-m-1, 0, -1)] for m in range(M)}
         elif isinstance(C, dict):
             self.gmms = [GaussianMixture(n_components=C[m]) for m in range(M)]
             self.transition_matrices = [np.zeros((C, C)) for n in n_transitions]  # not completed
@@ -107,13 +107,12 @@ class GaussianStateMachine():
             if VERBOSE >= 1: print("epoch {}: model loss = {:.5g}".format(epoch, epoch_loss))
 
         # assign weight matrices
-        self.transition_matrices[0] = model.ab.weight.cpu().detach().numpy()
-        self.transition_matrices[1] = model.ac.weight.cpu().detach().numpy()
-        self.transition_matrices[2] = model.ad.weight.cpu().detach().numpy()
-        self.transition_matrices[3] = model.bc.weight.cpu().detach().numpy()
-        self.transition_matrices[4] = model.bd.weight.cpu().detach().numpy()
-        self.transition_matrices[5] = model.cd.weight.cpu().detach().numpy()
-
+        self.transition_matrices[0][0] = model.ab.weight.cpu().detach().numpy()
+        self.transition_matrices[0][1] = model.ac.weight.cpu().detach().numpy()
+        self.transition_matrices[0][2] = model.ad.weight.cpu().detach().numpy()
+        self.transition_matrices[1][0] = model.bc.weight.cpu().detach().numpy()
+        self.transition_matrices[1][1] = model.bd.weight.cpu().detach().numpy()
+        self.transition_matrices[2][0] = model.cd.weight.cpu().detach().numpy()
 
     def train_model(self, X):
         """
@@ -137,15 +136,40 @@ class GaussianStateMachine():
         # 3. train transition matrices with gradient descent
         self.train_GD(P)
 
-    def sample(self, n_samples=1, set_states=None):
+    def sample_from_multigauss(self, id, weights):
+        target_gauss = np.random.choice(np.arange(self.C), weights)  # select the gaussian for the current GMM
+        # to sample from
+        means = self.gmms[id].means_[target_gauss]
+        covars = self.gmms[id].covariances_[target_gauss]
+        sample = np.random.multivariate_normal(means, covars)
+        return sample
+
+    def sample(self, n_samples=1, set_values={}):
         """
         Sample a value from each state
         :param n_samples:
-        :param set_states: optional, a numpy array with some values already entered. Unfilled values should be
-        represented by -1.
+        :param set_values: optional, a dictionary of numpy arrays of filled values indexed by the corresponding state.
         :return:
         """
         #TODO: complete this. Basically, for each state, sample a gaussian from the Gaussian mixture in proportion to
         # its weight, and then sample a value from it according to the Gaussian's parameters.
         # this might help: https://numpy.org/doc/stable/reference/random/generated/numpy.random.multivariate_normal.html
-        pass
+
+        # compute posteriors
+        posteriors = np.ones((self.M, self.C))
+        for m in range(self.M):
+            posteriors[m, :] = self.gmms[m].weights_  # assign priors first
+
+        output = np.ones((self.M, 3)) * -1  # to be filled
+        for m in range(self.M):
+            if m in set_values.keys():
+                output[m, :] = set_values[m]
+                posteriors[m, :] = self.gmms[m].predict_proba(set_values[m])
+            else:
+                posteriors[m, :] /= np.sum(posteriors[m, :])  # normalise
+                output[m, :] = self.sample_from_multigauss(m, posteriors[m, :])
+                for n in range(len(self.transition_matrices[m])):
+                    posteriors[m+n+1] *= np.matmul(posteriors[m, :], self.transition_matrices[m][n])
+
+        return output
+
