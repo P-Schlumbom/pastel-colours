@@ -4,8 +4,10 @@ import torch.nn as nn
 from sklearn.mixture import GaussianMixture
 import pickle
 
+VERBOSE = 1
+
 class PosteriorTransitionMachine(nn.Module):
-    def __init__(self, n_states=3):
+    def __init__(self, b_prior, c_prior, d_prior, n_states=3):
         super(PosteriorTransitionMachine, self).__init__()
 
         self.ab = nn.Linear(n_states, n_states)
@@ -14,6 +16,10 @@ class PosteriorTransitionMachine(nn.Module):
         self.bc = nn.Linear(n_states, n_states)
         self.bd = nn.Linear(n_states, n_states)
         self.cd = nn.Linear(n_states, n_states)
+
+        self.b_prior = torch.from_numpy(b_prior)
+        self.c_prior = torch.from_numpy(c_prior)
+        self.d_prior = torch.from_numpy(d_prior)
 
     def forward(self, a_posteriors, b_priors, c_priors, d_priors):
         b_posteriors = self.ab(a_posteriors) * b_priors
@@ -37,11 +43,16 @@ class GaussianStateMachine():
         """
         self.M = M
         self.C = C
+        n_transitions = M - 1
+        for transitions in range(M - 1, 0, -1):
+            n_transitions += transitions
 
         if isinstance(C, int):
             self.gmms = [GaussianMixture(n_components=C) for m in range(M)]
+            self.transition_matrices = [np.zeros((C, C)) for n in n_transitions]
         elif isinstance(C, dict):
             self.gmms = [GaussianMixture(n_components=C[m]) for m in range(M)]
+            self.transition_matrices = [np.zeros((C, C)) for n in n_transitions]  # not completed
         else:
             raise Exception("C must be integer of list of integers!")
 
@@ -54,6 +65,56 @@ class GaussianStateMachine():
     def train_state(self, state, X):
         self.gmms[state].fit(X)
 
+    def train_GD(self, P, epochs=10):
+        """
+        Train transition matrices on dataset of posteriors with gradient descent
+        :param epochs:
+        :param P: list of M NxC numpy arrays, one poserior for each sample for each state
+        :return:
+        """
+        device = torch.device("cuda")
+        torch.backends.cudnn.benchmark = True
+
+        learning_rate = 0.0001
+        epochs = epochs
+
+        model = PosteriorTransitionMachine(self.gmms[1].weights_, self.gmms[2].means_, self.gmms[3].means_, n_states=self.C)
+        model = model.to(device)
+        model_optimiser = torch.optim.Adam(model.parameters(), lr=learning_rate)
+
+        loss = nn.MSELoss()
+
+        # prepare posteriors and priors
+        P_mat = np.concatenate(P, axis=1)
+
+        # training
+        # for now, train on whole dataset at once (batch_size=N)
+        N = P[0].shape[0]
+        a_pos = P[0]
+        a_pos = torch.from_numpy(a_pos)
+        P_mat = torch.from_numpy(P_mat)
+        a_pos, P_mat = a_pos.to(device, dtype=torch.float), P_mat.to(device, dtype=torch.float)
+        for epoch in epochs:
+            total_loss = 0
+            model_optimiser.zero_grad()
+            pos_pred = model(a_pos)
+            pos_loss = loss(pos_pred, P_mat)
+            pos_loss.backward()
+            model_optimiser.step()
+
+            total_loss = pos_loss.item()
+            epoch_loss = total_loss / N
+            if VERBOSE >= 1: print("epoch {}: model loss = {:.5g}".format(epoch, epoch_loss))
+
+        # assign weight matrices
+        self.transition_matrices[0] = model.ab.weight.cpu().detach().numpy()
+        self.transition_matrices[1] = model.ac.weight.cpu().detach().numpy()
+        self.transition_matrices[2] = model.ad.weight.cpu().detach().numpy()
+        self.transition_matrices[3] = model.bc.weight.cpu().detach().numpy()
+        self.transition_matrices[4] = model.bd.weight.cpu().detach().numpy()
+        self.transition_matrices[5] = model.cd.weight.cpu().detach().numpy()
+
+
     def train_model(self, X):
         """
         Build all Gaussian Mixture Models at once.
@@ -61,8 +122,20 @@ class GaussianStateMachine():
         containing N D-dimensional data points.
         :return:
         """
+        N, D = X[0].shape
+        # 1. prepare prior GMM models
         for m in range(self.M):
             self.train_state(m, X[m])
+
+        # 2. compute dataset of posteriors
+        P = []
+        priors = []
+        for m in range(self.M):
+            P.append(self.gmms[m].predict_proba(X[m]))
+            priors.append(np.repeat(self.gmms[m].weights_, axis=0), N, axis=0)
+
+        # 3. train transition matrices with gradient descent
+        self.train_GD(P)
 
     def sample(self, n_samples=1, set_states=None):
         """
