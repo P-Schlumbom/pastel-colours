@@ -29,7 +29,6 @@ class PosteriorTransitionMachine(nn.Module):
         d_posteriors = self.ad(a_posteriors) * self.bd(b_posteriors) * self.cd(c_posteriors) * d_priors
         d_posteriors = d_posteriors / torch.sum(d_posteriors)
         posterior_predictions = torch.cat((a_posteriors, b_posteriors, c_posteriors, d_posteriors), dim=1)
-        print(posterior_predictions.size())
         return posterior_predictions
 
 class GaussianStateMachine():
@@ -59,10 +58,10 @@ class GaussianStateMachine():
             raise Exception("C must be integer of list of integers!")
 
     def save_model(self, savepath="test.pkl"):
-        pickle.dump(self.gmms, open(savepath, 'wb'))
+        pickle.dump([self.gmms, self.transition_matrices, self.transition_biases], open(savepath, 'wb'))
 
     def load_model(self, loadpath="test.pkl"):
-        self.gmms = pickle.load(open(loadpath, 'rb'))
+        self.gmms, self.transition_matrices, self.transition_biases = pickle.load(open(loadpath, 'rb'))
 
     def train_state(self, state, X):
         self.gmms[state].fit(X)
@@ -88,7 +87,6 @@ class GaussianStateMachine():
 
         # prepare posteriors and priors
         P_mat = np.concatenate(P, axis=1)
-        print(P_mat.shape)
 
         # training
         # for now, train on whole dataset at once (batch_size=N)
@@ -145,14 +143,12 @@ class GaussianStateMachine():
         priors = []
         for m in range(self.M):
             P.append(self.gmms[m].predict_proba(X[m]))
-            print(np.expand_dims(self.gmms[m].weights_, axis=0).shape)
             priors.append(np.repeat(np.expand_dims(self.gmms[m].weights_, axis=0), repeats=N, axis=0))
 
         # 3. train transition matrices with gradient descent
         self.train_GD(P, priors)
 
     def sample_from_multigauss(self, id, weights):
-        print(weights)
         target_gauss = np.random.choice(np.arange(self.C), p=weights)  # select the gaussian for the current GMM
         # to sample from
         means = self.gmms[id].means_[target_gauss]
@@ -175,7 +171,6 @@ class GaussianStateMachine():
         posteriors = np.ones((self.M, self.C))
         for m in range(self.M):
             posteriors[m, :] = self.gmms[m].weights_.copy()  # assign priors first
-        print(posteriors)
 
         output = np.ones((self.M, 3)) * -1  # to be filled
         for m in range(self.M):
@@ -183,20 +178,11 @@ class GaussianStateMachine():
                 output[m, :] = set_values[m]
                 posteriors[m, :] = self.gmms[m].predict_proba(set_values[m])
             else:
-                print(posteriors, np.sum(posteriors, axis=1))
-                #posteriors[m, :] /= np.sum(posteriors[m, :])  # normalise
                 posteriors[m, :] = (posteriors[m, :] - np.min(posteriors[m, :])) / (np.max(posteriors[m, :]) - np.min(posteriors[m, :]))
                 posteriors[m, :] /= np.sum(posteriors[m, :])  # normalise
-                print(posteriors, np.sum(posteriors, axis=1))
                 output[m, :] = self.sample_from_multigauss(m, posteriors[m, :])
-                print("---")
                 for n in range(len(self.transition_matrices[m])):
-                    #print(posteriors[m, :], self.transition_matrices[m][n])
                     posteriors[m+n+1] *= (np.matmul(posteriors[m, :], self.transition_matrices[m][n].T) + self.transition_biases[m][n])
-                    #posteriors[m + n + 1] *= np.matmul(self.transition_matrices[m][n], posteriors[m, :])
-                    #print(posteriors[m+n+1])
-                    #posteriors[m + n + 1] /= np.sum(posteriors[m+n+1, :])
-                    #print(posteriors[m+n+1])
 
         return output
 

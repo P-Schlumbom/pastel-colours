@@ -60,3 +60,6 @@ As each colour has 3 possible states, there are 6 possible 3x3 transition matric
 For each colour, using the GMM model, we can calculate the posterior values of each state for each colour scheme.
   These posteriors will serve as our training data. Using gradient descent, we can then train the values of the transition 
   matrices. 
+  
+## 20210715: Gaussian State Machine now functional
+Can now be trained on data and generate new colour schemes, although extensive testing still remains.  
