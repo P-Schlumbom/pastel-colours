@@ -151,8 +151,8 @@ for i in range(num_samples):
     plt.title("original palette")
     plt.subplot(1, 2*num_samples, (2*i)+2)
     plt.imshow(gen_palette[i])
-    if SAVE_RESULTS: plt.savefig("results/{}_demo_palettes.png".format(model_name))
     plt.title("generated palette")
+    if SAVE_RESULTS: plt.savefig("results/{}_demo_palettes.png".format(model_name))
 plt.show()
 
 

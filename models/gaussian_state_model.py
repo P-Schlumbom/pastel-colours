@@ -28,7 +28,8 @@ class PosteriorTransitionMachine(nn.Module):
         c_posteriors = c_posteriors / torch.sum(c_posteriors)
         d_posteriors = self.ad(a_posteriors) * self.bd(b_posteriors) * self.cd(c_posteriors) * d_priors
         d_posteriors = d_posteriors / torch.sum(d_posteriors)
-        posterior_predictions = torch.cat((a_posteriors, b_posteriors, c_posteriors, d_posteriors))
+        posterior_predictions = torch.cat((a_posteriors, b_posteriors, c_posteriors, d_posteriors), dim=1)
+        print(posterior_predictions.size())
         return posterior_predictions
 
 class GaussianStateMachine():
@@ -50,6 +51,7 @@ class GaussianStateMachine():
         if isinstance(C, int):
             self.gmms = [GaussianMixture(n_components=C) for m in range(M)]
             self.transition_matrices = {m : [np.zeros((C, C)) for n in range(M-m-1, 0, -1)] for m in range(M)}
+            self.transition_biases = {m: [np.zeros(C) for n in range(M-m-1, 0, -1)] for m in range(M)}
         elif isinstance(C, dict):
             self.gmms = [GaussianMixture(n_components=C[m]) for m in range(M)]
             self.transition_matrices = [np.zeros((C, C)) for n in n_transitions]  # not completed
@@ -65,11 +67,11 @@ class GaussianStateMachine():
     def train_state(self, state, X):
         self.gmms[state].fit(X)
 
-    def train_GD(self, P, epochs=10):
+    def train_GD(self, P, priors, epochs=10):
         """
         Train transition matrices on dataset of posteriors with gradient descent
         :param epochs:
-        :param P: list of M NxC numpy arrays, one poserior for each sample for each state
+        :param P: list of M NxC numpy arrays, one posterior for each sample for each state
         :return:
         """
         device = torch.device("cuda")
@@ -86,18 +88,24 @@ class GaussianStateMachine():
 
         # prepare posteriors and priors
         P_mat = np.concatenate(P, axis=1)
+        print(P_mat.shape)
 
         # training
         # for now, train on whole dataset at once (batch_size=N)
         N = P[0].shape[0]
-        a_pos = P[0]
-        a_pos = torch.from_numpy(a_pos)
+        a_pos, b_prior, c_prior, d_prior = P[0], priors[1], priors[2], priors[3]
+        a_pos, b_prior, c_prior, d_prior = torch.from_numpy(a_pos), torch.from_numpy(b_prior), \
+                                           torch.from_numpy(c_prior), torch.from_numpy(d_prior)
         P_mat = torch.from_numpy(P_mat)
-        a_pos, P_mat = a_pos.to(device, dtype=torch.float), P_mat.to(device, dtype=torch.float)
-        for epoch in epochs:
+        a_pos, b_prior, c_prior, d_prior, P_mat = a_pos.to(device, dtype=torch.float), \
+                                                  b_prior.to(device, dtype=torch.float), \
+                                                  c_prior.to(device, dtype=torch.float), \
+                                                  d_prior.to(device, dtype=torch.float), \
+                                                  P_mat.to(device, dtype=torch.float)
+        for epoch in range(epochs):
             total_loss = 0
             model_optimiser.zero_grad()
-            pos_pred = model(a_pos)
+            pos_pred = model(a_pos, b_prior, c_prior, d_prior)
             pos_loss = loss(pos_pred, P_mat)
             pos_loss.backward()
             model_optimiser.step()
@@ -113,6 +121,12 @@ class GaussianStateMachine():
         self.transition_matrices[1][0] = model.bc.weight.cpu().detach().numpy()
         self.transition_matrices[1][1] = model.bd.weight.cpu().detach().numpy()
         self.transition_matrices[2][0] = model.cd.weight.cpu().detach().numpy()
+        self.transition_biases[0][0] = model.ab.bias.cpu().detach().numpy()
+        self.transition_biases[0][1] = model.ac.bias.cpu().detach().numpy()
+        self.transition_biases[0][2] = model.ad.bias.cpu().detach().numpy()
+        self.transition_biases[1][0] = model.bc.bias.cpu().detach().numpy()
+        self.transition_biases[1][1] = model.bd.bias.cpu().detach().numpy()
+        self.transition_biases[2][0] = model.cd.bias.cpu().detach().numpy()
 
     def train_model(self, X):
         """
@@ -131,13 +145,15 @@ class GaussianStateMachine():
         priors = []
         for m in range(self.M):
             P.append(self.gmms[m].predict_proba(X[m]))
-            priors.append(np.repeat(self.gmms[m].weights_, axis=0), N, axis=0)
+            print(np.expand_dims(self.gmms[m].weights_, axis=0).shape)
+            priors.append(np.repeat(np.expand_dims(self.gmms[m].weights_, axis=0), repeats=N, axis=0))
 
         # 3. train transition matrices with gradient descent
-        self.train_GD(P)
+        self.train_GD(P, priors)
 
     def sample_from_multigauss(self, id, weights):
-        target_gauss = np.random.choice(np.arange(self.C), weights)  # select the gaussian for the current GMM
+        print(weights)
+        target_gauss = np.random.choice(np.arange(self.C), p=weights)  # select the gaussian for the current GMM
         # to sample from
         means = self.gmms[id].means_[target_gauss]
         covars = self.gmms[id].covariances_[target_gauss]
@@ -158,7 +174,8 @@ class GaussianStateMachine():
         # compute posteriors
         posteriors = np.ones((self.M, self.C))
         for m in range(self.M):
-            posteriors[m, :] = self.gmms[m].weights_  # assign priors first
+            posteriors[m, :] = self.gmms[m].weights_.copy()  # assign priors first
+        print(posteriors)
 
         output = np.ones((self.M, 3)) * -1  # to be filled
         for m in range(self.M):
@@ -166,10 +183,20 @@ class GaussianStateMachine():
                 output[m, :] = set_values[m]
                 posteriors[m, :] = self.gmms[m].predict_proba(set_values[m])
             else:
+                print(posteriors, np.sum(posteriors, axis=1))
+                #posteriors[m, :] /= np.sum(posteriors[m, :])  # normalise
+                posteriors[m, :] = (posteriors[m, :] - np.min(posteriors[m, :])) / (np.max(posteriors[m, :]) - np.min(posteriors[m, :]))
                 posteriors[m, :] /= np.sum(posteriors[m, :])  # normalise
+                print(posteriors, np.sum(posteriors, axis=1))
                 output[m, :] = self.sample_from_multigauss(m, posteriors[m, :])
+                print("---")
                 for n in range(len(self.transition_matrices[m])):
-                    posteriors[m+n+1] *= np.matmul(posteriors[m, :], self.transition_matrices[m][n])
+                    #print(posteriors[m, :], self.transition_matrices[m][n])
+                    posteriors[m+n+1] *= (np.matmul(posteriors[m, :], self.transition_matrices[m][n].T) + self.transition_biases[m][n])
+                    #posteriors[m + n + 1] *= np.matmul(self.transition_matrices[m][n], posteriors[m, :])
+                    #print(posteriors[m+n+1])
+                    #posteriors[m + n + 1] /= np.sum(posteriors[m+n+1, :])
+                    #print(posteriors[m+n+1])
 
         return output
 
