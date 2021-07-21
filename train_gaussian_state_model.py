@@ -7,19 +7,31 @@ from models.gaussian_state_model import GaussianStateMachine
 from utils.colour_transforms.hsv import rgb2hsv_palettes, hsv2rgb_palettes
 
 np.random.seed(1)
-SAVE_RESULTS = False
-HSV = True
+
+SAVE_RESULTS = False  # if true, saves generated figures
+LOAD_MODEL = True  # if true, loads previously trained model parameters. In this case modelpath and modelname must be
+# set appropriately.
+HSV = True  # if true, convert colours into HSV space. This makes an important difference, as pastel colours are much
+# more clearly defined in HSV space.
+modelpath = "checkpoints/GSM"  # path to the trained model files
+modelname = "test"  # name of the model file to load. Do not include extension.
+
 device = torch.device("cuda")
 torch.backends.cudnn.benchmark = True
 
-modelpath = "checkpoints/GSM"
 
 #
 # helper functions
 #
 
 def vector2im(vector):
-    return np.reshape(vector, (4, 1, 3))
+    """
+    Given a vector, convert it to a shape that can be read as an RGB image.
+    :param vector: numpy array of shape 1xN where N = 3M and M is the number of colours
+    :return: numpy array of shape (N//3)x1x3, i.e. an RGB image of dimensions (N//3)x1
+    """
+    n_colours = np.prod(vector.shape) // 3
+    return np.reshape(vector, (n_colours, 1, 3))
 
 #
 # training set up
@@ -41,12 +53,14 @@ print([pal.shape for pal in pastel_palettes_set])
 #
 
 print("training model...")
-modelname = "test"
 gsm = GaussianStateMachine(4, 3)  # 4 states, with 3 Gaussian components for each state
-#gsm.train_model(pastel_palettes_set)
-#gsm.save_model(join(modelpath, modelname + ".pkl"))
+
 #print("done")
-gsm.load_model(join(modelpath, modelname + ".pkl"))
+if LOAD_MODEL:
+    gsm.load_model(join(modelpath, modelname + ".pkl"))
+else:
+    gsm.train_model(pastel_palettes_set)
+    gsm.save_model(join(modelpath, modelname + ".pkl"))
 
 #
 # evaluate model
@@ -66,6 +80,17 @@ if HSV: gen_palette = hsv2rgb_palettes(gen_palette)
 gen_palette = vector2im(gen_palette)
 
 def generate_samples(source_palette, known_ids):
+    """
+    Given a source palette and a mask, use the model to generate a new palette conditioned on those colours in the
+    original palette revealed by the mask.
+    :param source_palette: numpy array of shape 1xN, representing the M RGB vectors of the palette's colours
+    concatenated into a single vector. That is, N = 3 x M. The first colour is the palette's primary colour, the second
+    the secondary, etc.
+    :param known_ids: list of integers, where each integer indexes a colour in the original palette which is known,
+    and which will be used by the generator to condition the generation of the remaining unknown colours.
+    :return: 3 numpy arrays of shape Mx1x3 (i.e. a 3-channel image of shape Mx1) corresponding to the original, masked
+    (all unknown colours in the palette set to black), and generated colour palettes, respectively.
+    """
     set_values = {i:source_palette[(i*3):(i*3)+3].reshape(1, -1) for i in known_ids}
     gen_palette = gsm.sample(set_values=set_values)
 
@@ -87,6 +112,13 @@ def generate_samples(source_palette, known_ids):
     return original_palette, masked_palette, gen_palette
 
 def display_generations(source_palette):
+    """
+    Given a single source palette, display the generated palettes for 12 different masks applied to the source palette.
+    :param source_palette: numpy array of shape 1xN, representing the M RGB vectors of the palette's colours
+    concatenated into a single vector. That is, N = 3 x M. The first colour is the palette's primary colour, the second
+    the secondary, etc.
+    :return:
+    """
     masks = [[0], [1], [2], [3],
              [0, 1], [1, 2], [2, 3], [0, 2],
              [1, 3], [0, 3], [0, 1, 2], [1, 2, 3]]
@@ -103,6 +135,11 @@ def display_generations(source_palette):
     plt.show()
 
 def display_samples():
+    """
+    Display the generated palettes for each of the first 12 pastel palettes in the dataset. For each case, all colours
+    but the first are masked, i.e. the palettes are generated based on the primary colour only.
+    :return:
+    """
     mask = [0]
     rows, columns = 3, 4*3
     for i, source_palette in enumerate(pastel_palettes[:12,:]):
@@ -120,6 +157,13 @@ def display_samples():
     plt.show()
 
 def display_sample(source_palette):
+    """
+    Given a single source palette, display the palette, its masked version, and the corresponding generated palette.
+    :param source_palette: numpy array of shape 1xN, representing the M RGB vectors of the palette's colours
+    concatenated into a single vector. That is, N = 3 x M. The first colour is the palette's primary colour, the second
+    the secondary, etc.
+    :return:
+    """
     original_palette, masked_palette, gen_palette = generate_samples(source_palette, [0])
     plt.subplot(1, 3, 1)
     plt.imshow(original_palette)
