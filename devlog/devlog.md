@@ -16,14 +16,24 @@ Using MMCQ, each of my 300 images were processed to produce a size-12 vector to 
 Additionally, a 300x12 matrix of randomly generated values was also stored as an alternative dataset.  
 
 ### GAN training
-A GAN was set up to try and generate pastel colour palettes from input palettes. The hope was to have something that could be given an input colour palette and would then convert it into something that fits the distribution of pastel colour palettes.
-Since the intention was to *modify* an existing palette to become a pastel palette, the generator was built as a simple resnet: the output of the 2-layer network is added to the original input to produce the final output. 
-Thus the network's task is not to just create a pastel palette, but to take an input palette and come up with modifications that will convert it into a pastel colour palette.  
+A GAN was set up to try and generate pastel colour palettes from input palettes. The hope was to have something that 
+could be given an input colour palette and would then convert it into something that fits the distribution of pastel 
+colour palettes.
+Since the intention was to *modify* an existing palette to become a pastel palette, the generator was built as a simple 
+resnet: the output of the 2-layer network is added to the original input to produce the final output. 
+Thus the network's task is not to just create a pastel palette, but to take an input palette and come up with 
+modifications that will convert it into a pastel colour palette.  
 The natural colourscheme dataset turned out not to be helpful, since most photos ended up having a fairly similar scheme 
-of blacks, browns, dark greens and the occasional blues. So the GAN just turned them all into the same colour scheme and called it a day. Who'da thunk?  
-So the random colour palettes were used instead. Without hyperparameter tuning this produced a generator that converted most - but not all - colours into fairly pastel-shaded versions. However it would also occasionally output decidedly non-pastel colours, 
-such as particularly dark, saturated or neon shades. After extensive hyperparameter tuning (which mostly involved reducing the layer size and increasing the batch size to the maximum), eventually a configuration was found which turned out alright results.   
-Basically, it just softened every input colour. This is fairly ok, but I was hoping for a network that would also consider the colours holistically and change some to produce a better overall scheme.  
+of blacks, browns, dark greens and the occasional blues. So the GAN just turned them all into the same colour scheme 
+and called it a day. Who'da thunk?  
+So the random colour palettes were used instead. Without hyperparameter tuning this produced a generator that converted 
+most - but not all - colours into fairly pastel-shaded versions. However it would also occasionally output decidedly 
+non-pastel colours, 
+such as particularly dark, saturated or neon shades. After extensive hyperparameter tuning (which mostly involved 
+reducing the layer size and increasing the batch size to the maximum), eventually a configuration was found which 
+turned out alright results.   
+Basically, it just softened every input colour. This is fairly ok, but I was hoping for a network that would also 
+consider the colours holistically and change some to produce a better overall scheme.  
 The generator and discriminator always found an equilibrium at a BCE loss of around 0.7.
 
 ### thoughts for improvement
